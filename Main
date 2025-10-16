@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LifeLink — Quezon City Blood Locator</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Inter font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#f7f8fb;
+      --card:#ffffff;
+      --primary:#c62828; /* deep red */
+      --accent:#f59e0b;  /* warm yellow accent */
+      --muted:#6b7280;
+      --glass: rgba(255,255,255,0.55);
+      --glass-strong: rgba(255,255,255,0.72);
+      --radius:14px;
+      --container:1120px;
+      --shadow: 0 8px 30px rgba(15,23,42,0.06);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+      background: linear-gradient(180deg,#fbfcfd 0%, var(--bg) 100%);
+      color:#0f1724;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      line-height:1.4;
+    }
+
+    .wrap{ max-width:var(--container); margin:26px auto; padding:20px; }
+
+    /* Header */
+    header.site-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:20px;
+      background:linear-gradient(90deg,var(--primary),#e53935);
+      color:white;
+      padding:18px 22px;
+      border-radius:var(--radius);
+      box-shadow:0 10px 34px rgba(198,40,40,0.12);
+    }
+    .brand{ display:flex; gap:14px; align-items:center; }
+    .logo{
+      width:58px; height:58px; border-radius:12px;
+      background:rgba(255,255,255,0.12);
+      display:flex; align-items:center; justify-content:center;
+      font-weight:800; font-size:20px; letter-spacing:0.6px;
+    }
+    .brand h1{ margin:0; font-size:18px; }
+    .brand p{ margin:0; font-size:12px; opacity:0.95; }
+    nav.mainnav{ display:flex; gap:14px; align-items:center; }
+    nav.mainnav a{ color:white; text-decoration:none; font-weight:600; opacity:0.94; padding:6px 10px; border-radius:8px; }
+    nav.mainnav a:hover{ background:rgba(255,255,255,0.06); opacity:1; }
+
+    /* Hero / actions */
+    .top-actions{ display:flex; gap:12px; align-items:center; }
+    .btn{ background:var(--card); color:var(--primary); border:none; padding:9px 12px; border-radius:12px; font-weight:700; cursor:pointer; box-shadow:none; }
+    .btn.primary{ background:var(--primary); color:white; box-shadow:0 8px 26px rgba(198,40,40,0.14); }
+    .btn.ghost{ background:transparent; color:white; border:1px solid rgba(255,255,255,0.12); }
+
+    /* layout grid */
+    .main-grid{
+      display:grid;
+      grid-template-columns: 1fr 420px;
+      gap:18px;
+      margin-top:18px;
+      align-items:start;
+    }
+
+    /* Glass card style consistent across site */
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.82), var(--glass));
+      border-radius:12px;
+      padding:16px;
+      box-shadow:var(--shadow);
+      backdrop-filter: blur(6px) saturate(120%);
+    }
+
+    /* controls */
+    .controls{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    select,input{ padding:10px 12px; border:1px solid rgba(6,12,24,0.06); border-radius:10px; font-size:14px; color:#111827; background:rgba(255,255,255,0.9); outline:none; }
+    .search-row{ display:flex; gap:10px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
+
+    /* map */
+    #map{ height:520px; border-radius:10px; overflow:hidden; }
+
+    /* centers list */
+    #centers-list{ list-style:none; margin:0; padding:0; max-height:220px; overflow:auto; }
+    #centers-list li{ padding:12px 10px; border-bottom:1px dashed rgba(15,23,42,0.03); display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    #centers-list li strong{ display:block; color:#0f1724; font-size:15px; }
+    .center-meta{ color:var(--muted); font-size:13px; }
+
+    /* side */
+    .side{ display:flex; flex-direction:column; gap:12px; min-height:520px; }
+
+    .form-line{ display:flex; gap:12px; align-items:center; margin:8px 0; }
+    .form-line label{ min-width:160px; font-weight:600; color:var(--muted); font-size:14px; }
+    .form-actions{ display:flex; gap:10px; margin-top:12px; justify-content:flex-end; }
+
+    /* overlay (role selection) */
+    .overlay{
+      position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+      background: linear-gradient(0deg, rgba(2,6,23,0.6), rgba(2,6,23,0.5));
+      z-index:9999; padding:20px;
+    }
+    .overlay.hidden{ display:none; }
+    .role-card{ width:100%; max-width:780px; background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,255,255,0.72)); border-radius:14px; padding:22px; box-shadow:0 30px 80px rgba(2,6,23,0.35); backdrop-filter: blur(8px); }
+
+    /* dashboard table */
+    #dashboard{ display:none; margin-top:18px; }
+    table.history{ width:100%; border-collapse:collapse; font-size:14px; }
+    table.history th, table.history td{ padding:10px; text-align:left; border-bottom:1px solid rgba(15,23,42,0.04); vertical-align:middle; }
+    .status-pill{ padding:6px 10px; border-radius:18px; font-weight:700; font-size:12px; display:inline-block; }
+    .status-Registered{ background:#fff7ed; color:#92400e; }
+    .status-Verified{ background:#e6fffa; color:#055160; }
+    .status-Scheduled{ background:#fffbeb; color:#92400e; }
+    .status-Completed{ background:#eef6ee; color:#14532d; }
+
+    /* small helpers */
+    .mini { font-size:12px; color:var(--muted); }
+    .flex { display:flex; gap:8px; align-items:center; }
+    .pill { padding:6px 10px; border-radius:999px; background:#f3f4f6; font-weight:700; font-size:13px; }
+    .accent { color:var(--accent); font-weight:800; }
+    .muted-block { color:var(--muted); font-size:13px; margin-top:6px; }
+    .center-actions button{ margin-left:8px; }
+
+    /* manage modal */
+    .modal-backdrop{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(2,6,23,0.45); z-index:10010; padding:20px; }
+    .modal { width:100%; max-width:620px; background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,255,255,0.86)); border-radius:12px; padding:18px; box-shadow:0 30px 80px rgba(2,6,23,0.2); backdrop-filter: blur(8px); }
+
+    /* footer */
+    .site-footer{ text-align:center; margin-top:18px; color:var(--muted); font-size:13px; }
+
+    /* responsive */
+    @media (max-width:1000px){
+      .main-grid{ grid-template-columns: 1fr; }
+      .side{ order:2 }
+      #map{ height:360px; }
+      .form-line label{ min-width:120px; }
+    }
+
+  </style>
+</head>
+<body>
+  <!-- ROLE SELECTION OVERLAY (first-time guidance / login) -->
+  <div id="role-screen" class="overlay" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+    <div class="role-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div>
+          <h1 id="welcome-title" style="margin:0;color:var(--primary)">Welcome to LifeLink</h1>
+          <p class="muted" style="margin:8px 0 0 0">Quezon City — connect donors and recipients quickly and safely.</p>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700;color:var(--primary)">LifeLink</div>
+          <div class="muted mini">v1.1 • Deploy-ready Prototype</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <p class="muted">Sign in or continue as guest. Creating a local account stores your name so the Dashboard can show your history. For production, replace this with secure server-side authentication.</p>
+
+        <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
+          <button id="choose-donor" class="btn primary">Register / Sign in (Donor)</button>
+          <button id="choose-recipient" class="btn" style="background:#ef4444;color:white">Register / Sign in (Recipient)</button>
+          <button id="guest-continue" class="btn ghost">Continue as Guest</button>
+        </div>
+
+        <hr style="margin:16px 0;border:none;border-top:1px solid rgba(15,23,42,0.04)" />
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1; min-width:220px;">
+            <input id="quick-account-name" placeholder="Your name (optional)" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(15,23,42,0.04)">
+            <div class="mini muted" style="margin-top:6px">Provide a name to have a personal Dashboard (saved locally).</div>
+          </div>
+          <div>
+            <button id="quick-guest-register" class="btn">Save Name</button>
+          </div>
+        </div>
+
+      </div>
+
+      <hr style="margin:16px 0;border:none;border-top:1px solid rgba(15,23,42,0.04)" />
+      <small class="muted">Privacy note: this app stores data locally in your browser (localStorage). For production, implement secure back-end storage and data protection policies.</small>
+    </div>
+  </div>
+
+  <div class="wrap" id="app">
+    <header class="site-header" role="banner">
+      <div class="brand">
+        <div class="logo">LL</div>
+        <div>
+          <h1 style="margin:0">LifeLink</h1>
+          <p style="margin:6px 0 0 0; font-size:13px">Quezon City Blood Locator</p>
+        </div>
+      </div>
+
+      <nav class="mainnav" role="navigation" aria-label="Main">
+        <a href="#home" id="nav-home">Home</a>
+        <a href="#dashboard-link" id="nav-dashboard">Dashboard</a>
+        <a href="#about" id="nav-about">About</a>
+      </nav>
+
+      <div class="top-actions">
+        <button id="open-donor" class="btn">Donor Form</button>
+        <button id="open-recipient" class="btn" style="background:#ef4444;color:white">Recipient Form</button>
+        <button id="user-menu" class="btn ghost">Account</button>
+      </div>
+    </header>
+
+    <main id="home" style="margin-top:18px;">
+      <div class="main-grid" role="main">
+        <!-- LEFT: map + search -->
+        <div>
+          <div class="card" aria-labelledby="search-title">
+            <h3 id="search-title" style="margin:0 0 8px 0">Search Centers</h3>
+            <p class="muted" style="margin:0 0 10px 0">Filter centers by district and blood type. Click a marker for details and contact info.</p>
+
+            <div class="search-row">
+              <select id="district-select" aria-label="Select district">
+                <option value="">-- Select District (auto-center) --</option>
+                <option>District I (QC Memorial Circle)</option>
+                <option>District II (Commonwealth)</option>
+                <option>District III (Cubao)</option>
+                <option>District IV (New Manila)</option>
+                <option>District V (Fairview)</option>
+                <option>District VI (Batasan Hills)</option>
+              </select>
+
+              <select id="blood-select" aria-label="Select blood type">
+                <option value="">-- Blood Type (optional) --</option>
+                <option>A+</option><option>A-</option>
+                <option>B+</option><option>B-</option>
+                <option>AB+</option><option>AB-</option>
+                <option>O+</option><option>O-</option>
+              </select>
+
+              <button id="btn-search" class="btn primary">Search</button>
+              <button id="btn-show-all" class="btn">Show All</button>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <div id="map" aria-label="Map with centers"></div>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <h4 style="margin:0 0 8px 0">Hospitals & Blood Centers</h4>
+            <ul id="centers-list" aria-live="polite"></ul>
+          </div>
+        </div>
+
+        <!-- RIGHT: side info and quick forms -->
+        <aside class="side" aria-label="Sidebar">
+          <div class="card">
+            <h4 style="margin:0 0 8px 0">Quick Procedure</h4>
+            <ol style="padding-left:18px;margin:0;color:var(--muted);font-size:14px;">
+              <li>Select role (Donor or Recipient)</li>
+              <li>Complete the short form — this creates a record</li>
+              <li>Use the Dashboard to manage status and schedule</li>
+              <li>Contact the center directly to confirm appointment</li>
+            </ol>
+            <div class="muted-block">This app demonstrates a reliable flow: registration → verification → scheduling → completion. For production, integrate hospital systems and secure back-end APIs.</div>
+          </div>
+
+          <div class="card">
+            <h4 style="margin:0 0 8px 0">Register / Request</h4>
+            <p class="muted" style="margin:0 0 10px 0">Open your role form below — one-line-per-question layout for clarity.</p>
+            <div style="display:flex;gap:8px;">
+              <button id="quick-donor" class="btn" style="flex:1">Donor Form</button>
+              <button id="quick-recipient" class="btn" style="background:#ef4444;color:white;flex:1">Recipient Form</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h4 style="margin:0 0 8px 0">Map Legend</h4>
+            <div class="flex">
+              <div class="pill">Marker</div>
+              <div style="flex:1">
+                <div style="font-weight:700">Hospital / Blood Center</div>
+                <div class="mini muted">Click to view contact & available blood types</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Dashboard area -->
+      <section id="dashboard" class="card" aria-labelledby="dashboard-title">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <h3 id="dashboard-title" style="margin:0">My Dashboard</h3>
+            <div class="muted mini">Track your registrations, requests, appointment dates and statuses.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button id="export-csv" class="btn">Export CSV</button>
+            <button id="clear-history" class="btn ghost">Clear Local History</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;overflow:auto">
+          <table class="history" aria-live="polite" role="table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Name</th>
+                <th>District</th>
+                <th>Hospital</th>
+                <th>Blood Type / Urgency</th>
+                <th>Appointment</th>
+                <th>Status</th>
+                <th style="width:160px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+          <div id="no-history" class="muted" style="margin-top:12px;">No records yet — submit a Donor registration or Recipient request to see activity here.</div>
+        </div>
+      </section>
+
+      <!-- About / Contact -->
+      <section id="about" class="card" style="margin-top:18px;">
+        <h3 style="margin:0 0 8px 0">About LifeLink</h3>
+        <p class="muted">LifeLink helps connect volunteer donors and recipients across Quezon City. It currently runs fully client-side (localStorage) for easy deployment and testing. To make it production-ready, integrate a secure back-end (authentication, database, audit logs), and ensure compliance with local data privacy and medical record regulations.</p>
+
+        <h4 style="margin-top:12px">Contact</h4>
+        <p class="muted">For feedback or partnerships: <strong>livelink@example.org</strong> (demo)</p>
+      </section>
+
+      <footer class="site-footer">
+        &copy; <span id="year"></span> LifeLink — Deployable (Client-side) App
+      </footer>
+    </main>
+  </div>
+
+  <!-- FORM MODAL -->
+  <div id="pre-form" class="overlay hidden" aria-hidden="true">
+    <div class="role-card" role="dialog" aria-labelledby="form-title" aria-modal="true" style="max-width:840px;">
+      <h2 id="form-title" style="margin:0 0 6px 0;color:var(--primary)"></h2>
+      <p id="form-sub" class="muted" style="margin:0 0 12px 0"></p>
+      <form id="entry-form" style="max-height:70vh; overflow:auto;">
+        <!-- injected fields -->
+      </form>
+    </div>
+  </div>
+
+  <!-- MANAGE MODAL (for dashboard record management) -->
+  <div id="manage-modal" class="modal-backdrop" style="display:none;">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="manage-title">
+      <h3 id="manage-title" style="margin:0 0 6px 0">Manage Record</h3>
+      <p class="muted" id="manage-sub" style="margin:0 0 12px 0">Update status, schedule appointment or add notes.</p>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div class="form-line"><label style="min-width:140px">Status</label>
+          <select id="manage-status">
+            <option>Registered</option>
+            <option>Verified</option>
+            <option>Scheduled</option>
+            <option>Completed</option>
+          </select>
+        </div>
+        <div class="form-line"><label style="min-width:140px">Appointment</label>
+          <input id="manage-appointment" type="datetime-local" />
+        </div>
+        <div class="form-line"><label style="min-width:140px">Notes</label>
+          <input id="manage-notes" placeholder="Optional notes" />
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px;">
+          <button id="manage-cancel" class="btn ghost">Cancel</button>
+          <button id="manage-save" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    /* -----------------------
+       Data & helpers (preserve original centers)
+    --------------------------*/
+    const centers = [
+      { id:1, name: "Philippine Blood Center", district: "District IV (New Manila)", lat: 14.6261, lng: 121.0453, contact: "02-8293-2182", blood: ["A+","O+","B+"] },
+      { id:2, name: "National Kidney and Transplant Institute (NKTI)", district: "District III (Cubao)", lat: 14.6505, lng: 121.0583, contact: "02-8929-3601", blood: ["O-","AB+","A+"] },
+      { id:3, name: "East Avenue Medical Center", district: "District IV (New Manila)", lat: 14.6386, lng: 121.0489, contact: "02-8928-0611", blood: ["B-","O+","AB-"] },
+      { id:4, name: "FEU-NRMF Medical Center", district: "District V (Fairview)", lat: 14.7063, lng: 121.0568, contact: "02-8936-8361", blood: ["A+","B+","O+"] }
+    ];
+
+    const districtCoords = {
+      "District I (QC Memorial Circle)": [14.6488, 121.0465],
+      "District II (Commonwealth)": [14.6835, 121.0731],
+      "District III (Cubao)": [14.6191, 121.0567],
+      "District IV (New Manila)": [14.6263, 121.0427],
+      "District V (Fairview)": [14.7214, 121.0596],
+      "District VI (Batasan Hills)": [14.6935, 121.0934],
+    };
+
+    /* -----------------------
+       LocalStorage keys
+    --------------------------*/
+    const LS_USER_KEY = 'livelink_user_v1';
+    const LS_HISTORY_KEY = 'livelink_history_v1';
+
+    function loadUser(){
+      try { return JSON.parse(localStorage.getItem(LS_USER_KEY) || 'null'); } catch(e){ return null; }
+    }
+    function saveUser(user){
+      localStorage.setItem(LS_USER_KEY, JSON.stringify(user));
+    }
+
+    function loadHistory(){ try{return JSON.parse(localStorage.getItem(LS_HISTORY_KEY)||'[]')}catch(e){return []} }
+    function saveHistory(list){ localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(list)); }
+
+    function pushRecord(rec){
+      const list = loadHistory();
+      rec.id = 'rec_' + Date.now();
+      rec.createdAt = new Date().toISOString();
+      list.unshift(rec);
+      saveHistory(list);
+      return rec;
+    }
+
+    function updateRecord(id, patch){
+      const list = loadHistory();
+      const idx = list.findIndex(r=>r.id===id);
+      if(idx>-1){
+        list[idx] = {...list[idx], ...patch, updatedAt: new Date().toISOString()};
+        saveHistory(list);
+        return list[idx];
+      }
+      return null;
+    }
+
+    /* -----------------------
+       Map
+    --------------------------*/
+    let map, markersLayer;
+    function initMap(){
+      if(map) return;
+      map = L.map('map', { zoomControl:true }).setView([14.65, 121.05], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+      renderCenters(centers);
+    }
+
+    function renderCenters(list){
+      if(!map) initMap();
+      markersLayer.clearLayers();
+      const listEl = document.getElementById('centers-list');
+      listEl.innerHTML = '';
+      list.forEach(c=>{
+        const li = document.createElement('li');
+        li.innerHTML = `<div>
+                          <strong>${c.name}</strong>
+                          <div class="center-meta">${c.district}</div>
+                          <div class="mini muted">Contact: ${c.contact} • Blood: ${c.blood.join(', ')}</div>
+                        </div>
+                        <div class="center-actions">
+                          <button class="btn" data-id="${c.id}" onclick="focusCenter(${c.id})">Show</button>
+                          <button class="btn" style="background:var(--accent);color:#111" onclick="contactCenter(${c.id})">Contact</button>
+                        </div>`;
+        listEl.appendChild(li);
+
+        const marker = L.marker([c.lat, c.lng]).addTo(markersLayer);
+        marker.bindPopup(`<b>${c.name}</b><br>${c.district}<br><small>Contact: ${c.contact}</small><br><em>Blood: ${c.blood.join(', ')}</em>`);
+        marker._centerId = c.id;
+      });
+
+      if(list.length){
+        const group = L.featureGroup(list.map(c=>L.marker([c.lat,c.lng])));
+        try { map.fitBounds(group.getBounds(), { maxZoom: 14, padding: [30,30] }); } catch(e){}
+      }
+    }
+
+    function focusCenter(centerId){
+      const c = centers.find(x=>x.id===centerId);
+      if(!c) return;
+      map.setView([c.lat, c.lng], 15);
+      markersLayer.eachLayer(m => {
+        if(m._centerId === centerId) m.openPopup();
+      });
+    }
+
+    function contactCenter(centerId){
+      const c = centers.find(x=>x.id===centerId);
+      if(!c) return alert('Center not found');
+      const phone = c.contact || 'No contact';
+      alert(`Contact ${c.name}\nPhone: ${phone}\nPlease call the center to confirm availability and appointments.`);
+    }
+
+    /* -----------------------
+       Forms & Account
+    --------------------------*/
+    const roleScreen = document.getElementById('role-screen');
+    const preForm = document.getElementById('pre-form');
+    const entryForm = document.getElementById('entry-form');
+
+    // show form (donor / recipient)
+    function showForm(role){
+      roleScreen.classList.add('hidden');
+      preForm.classList.remove('hidden');
+      preForm.setAttribute('aria-hidden', 'false');
+      entryForm.innerHTML = '';
+      document.getElementById('form-title').textContent = role === 'donor' ? 'Donor Registration' : 'Recipient Request';
+      document.getElementById('form-sub').textContent = role === 'donor' ? 'Provide accurate details to register as a donor.' : 'Provide patient/hospital details for the request.';
+
+      // build fields based on role (preserve earlier fields)
+      const fields = role === 'donor' ? [
+        {name:'fullName', label:'Full Name', type:'text', placeholder:'Juan Dela Cruz', required:true},
+        {name:'age', label:'Age', type:'number', placeholder:'18', min:18, max:65, required:true},
+        {name:'gender', label:'Gender', type:'select', options:['Male','Female','Prefer not to say'], required:true},
+        {name:'contact', label:'Contact Number', type:'tel', placeholder:'09XXXXXXXXX', required:true},
+        {name:'email', label:'Email (optional)', type:'email', placeholder:'name@example.com', required:false},
+        {name:'district', label:'District', type:'select', options:Object.keys(districtCoords), required:true},
+        {name:'prefHospital', label:'Preferred Hospital', type:'select', options: centers.map(c=>c.name), required:true},
+        {name:'bloodType', label:'Blood Type', type:'select', options:['A+','A-','B+','B-','AB+','AB-','O+','O-'], required:true},
+        {name:'lastDonation', label:'Last Donation Date', type:'date', required:false},
+        {name:'medical', label:'Medical Conditions', type:'text', placeholder:'None', required:false}
+      ] : [
+        {name:'patientName', label:'Patient Name', type:'text', placeholder:'John Doe', required:true},
+        {name:'patientAge', label:'Patient Age', type:'number', placeholder:'e.g., 45', required:true},
+        {name:'reqBlood', label:'Required Blood Type', type:'select', options:['A+','A-','B+','B-','AB+','AB-','O+','O-'], required:true},
+        {name:'district', label:'District', type:'select', options:Object.keys(districtCoords), required:true},
+        {name:'hospital', label:'Hospital', type:'select', options: centers.map(c=>c.name), required:true},
+        {name:'physician', label:'Attending Physician', type:'text', placeholder:'Dr. Name', required:true},
+        {name:'hospitalContact', label:'Hospital Contact', type:'tel', placeholder:'Landline or mobile', required:true},
+        {name:'requester', label:'Requester Name', type:'text', required:true},
+        {name:'requesterContact', label:'Requester Contact', type:'tel', required:true},
+        {name:'urgency', label:'Urgency Level', type:'select', options:['Normal','Urgent','Critical'], required:true}
+      ];
+
+      fields.forEach(f=>{
+        const row = document.createElement('div'); row.className = 'form-line';
+        const label = document.createElement('label'); label.textContent = f.label; label.htmlFor = f.name;
+        let input;
+        if(f.type === 'select'){
+          input = document.createElement('select'); input.name = f.name; f.options.forEach(opt=>{ const o=document.createElement('option'); o.value=opt; o.textContent=opt; input.appendChild(o); });
+        } else {
+          input = document.createElement('input'); input.type = f.type; input.name = f.name;
+          if(f.placeholder) input.placeholder = f.placeholder;
+          if(f.min) input.min = f.min; if(f.max) input.max = f.max;
+        }
+        if(f.required) input.required = true;
+        row.appendChild(label); row.appendChild(input); entryForm.appendChild(row);
+      });
+
+      const actions = document.createElement('div'); actions.className = 'form-actions';
+      actions.innerHTML = `<button type="button" class="btn" id="cancel-entry">Cancel</button>
+                           <button type="submit" class="btn primary">Submit</button>`;
+      entryForm.appendChild(actions);
+
+      document.getElementById('cancel-entry').onclick = ()=>{ preForm.classList.add('hidden'); roleScreen.classList.remove('hidden'); preForm.setAttribute('aria-hidden','true'); };
+
+      entryForm.onsubmit = (e)=>{
+        e.preventDefault();
+        const form = new FormData(entryForm);
+        const obj = {};
+        for(const [k,v] of form.entries()) obj[k]=v;
+
+        // build record
+        const record = role === 'donor' ? {
+          type: 'Donor',
+          name: obj.fullName,
+          district: obj.district,
+          hospital: obj.prefHospital,
+          blood: obj.bloodType || '',
+          urgency: '',
+          appointment: '',
+          status: 'Registered',
+          notes: ''
+        } : {
+          type: 'Recipient',
+          name: obj.patientName,
+          district: obj.district,
+          hospital: obj.hospital,
+          blood: obj.reqBlood || '',
+          urgency: obj.urgency || '',
+          appointment: '',
+          status: 'Registered',
+          notes: ''
+        };
+
+        // attach user info if available
+        const user = loadUser();
+        if(user && user.name) record.createdBy = user.name;
+
+        pushRecord(record);
+        renderHistory();
+        preForm.classList.add('hidden'); preForm.setAttribute('aria-hidden','true');
+        initMap();
+        showDashboard();
+        alert('Submitted successfully — your record is saved locally. Contact the selected hospital to confirm availability.');
+      };
+    }
+
+    /* -----------------------
+       Dashboard
+    --------------------------*/
+    function renderHistory(){
+      const body = document.getElementById('history-body');
+      const list = loadHistory();
+      const noHistory = document.getElementById('no-history');
+      body.innerHTML = '';
+      if(!list.length){ noHistory.style.display = 'block'; return; } else noHistory.style.display = 'none';
+
+      list.forEach(r=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r.type}</td>
+          <td>${r.name}</td>
+          <td>${r.district || ''}</td>
+          <td>${r.hospital || ''}</td>
+          <td>${r.blood || r.urgency || ''}</td>
+          <td>${r.appointment ? formatLocal(r.appointment) : '<span class="mini muted">Not scheduled</span>'}</td>
+          <td><span class="status-pill status-${(r.status||'').replace(/\s/g,'')}">${r.status}</span></td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn" onclick="openManage('${r.id}')">Manage</button>
+              <button class="btn ghost" onclick="removeRecord('${r.id}')">Delete</button>
+            </div>
+          </td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function formatLocal(dt){
+      if(!dt) return '';
+      try{
+        // if ISO
+        const d = new Date(dt);
+        if(!isNaN(d)) return d.toLocaleString();
+      }catch(e){}
+      return dt;
+    }
+
+    function showDashboard(){
+      document.getElementById('dashboard').style.display = 'block';
+      document.getElementById('dashboard').scrollIntoView({behavior:'smooth'});
+      renderHistory();
+    }
+
+    function openManage(id){
+      const list = loadHistory();
+      const rec = list.find(x=>x.id===id);
+      if(!rec) return alert('Record not found');
+
+      // open modal & populate fields
+      document.getElementById('manage-status').value = rec.status || 'Registered';
+      document.getElementById('manage-notes').value = rec.notes || '';
+      // if appointment is ISO, convert to local datetime-local format
+      const apptInput = document.getElementById('manage-appointment');
+      if(rec.appointment){
+        try {
+          const d = new Date(rec.appointment);
+          if(!isNaN(d)){
+            // format to yyyy-MM-ddTHH:mm
+            const tzOffset = d.getTimezoneOffset() * 60000;
+            const localISO = (new Date(d.getTime() - tzOffset)).toISOString().slice(0,16);
+            apptInput.value = localISO;
+          } else apptInput.value = rec.appointment;
+        } catch(e){ apptInput.value = rec.appointment; }
+      } else apptInput.value = '';
+
+      // show modal
+      const mm = document.getElementById('manage-modal');
+      mm.style.display = 'flex';
+      mm.dataset.recId = id;
+      mm.scrollIntoView({behavior:'smooth'});
+    }
+
+    // manage modal save / cancel
+    document.getElementById('manage-cancel').addEventListener('click', ()=>{
+      document.getElementById('manage-modal').style.display = 'none';
+    });
+
+    document.getElementById('manage-save').addEventListener('click', ()=>{
+      const mm = document.getElementById('manage-modal');
+      const id = mm.dataset.recId;
+      const status = document.getElementById('manage-status').value;
+      const appt = document.getElementById('manage-appointment').value;
+      const notes = document.getElementById('manage-notes').value;
+      const patch = { status, notes };
+      if(appt) {
+        // convert appointment (datetime-local) to ISO for storage (safe)
+        try {
+          const dt = new Date(appt);
+          patch.appointment = dt.toISOString();
+        } catch(e){
+          patch.appointment = appt;
+        }
+      } else patch.appointment = '';
+      updateRecord(id, patch);
+      mm.style.display = 'none';
+      renderHistory();
+      alert('Record updated.');
+    });
+
+    function removeRecord(id){
+      if(!confirm('Delete this record? This cannot be undone.')) return;
+      let list = loadHistory();
+      list = list.filter(r=>r.id!==id);
+      saveHistory(list);
+      renderHistory();
+    }
+
+    /* -----------------------
+       CSV export & utilities
+    --------------------------*/
+    function exportCSV(){
+      const list = loadHistory();
+      if(!list.length) return alert('No history to export.');
+      const keys = ['id','type','name','district','hospital','blood','urgency','appointment','status','createdAt','updatedAt','notes','createdBy'];
+      const rows = [keys.join(',')];
+      list.forEach(r=>{
+        const vals = keys.map(k => `"${(r[k]||'').toString().replace(/"/g,'""')}"`);
+        rows.push(vals.join(','));
+      });
+      const csv = rows.join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'livelink_history.csv'; document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('export-csv').addEventListener('click', exportCSV);
+    document.getElementById('clear-history').addEventListener('click', ()=>{
+      if(confirm('Clear all local history? This cannot be undone.')){
+        localStorage.removeItem(LS_HISTORY_KEY);
+        renderHistory();
+        alert('History cleared');
+      }
+    });
+
+    /* -----------------------
+       Account (local) & small auth flow
+    --------------------------*/
+    // quick account save (from overlay)
+    document.getElementById('quick-guest-register').addEventListener('click', ()=>{
+      const name = document.getElementById('quick-account-name').value.trim();
+      if(!name) return alert('Enter a name to save locally.');
+      const user = { name, createdAt: new Date().toISOString() };
+      saveUser(user);
+      alert(`Saved name "${name}". Dashboard will show your records.`);
+    });
+
+    // Guest continue
+    document.getElementById('guest-continue').addEventListener('click', ()=>{
+      roleScreen.classList.add('hidden');
+      initMap();
+    });
+
+    // button shortcuts
+    document.getElementById('choose-donor').addEventListener('click', ()=> openAccountThen('donor'));
+    document.getElementById('choose-recipient').addEventListener('click', ()=> openAccountThen('recipient'));
+
+    // top menu buttons
+    document.getElementById('open-donor').addEventListener('click', ()=> openAccountThen('donor'));
+    document.getElementById('open-recipient').addEventListener('click', ()=> openAccountThen('recipient'));
+    document.getElementById('quick-donor').addEventListener('click', ()=> openAccountThen('donor'));
+    document.getElementById('quick-recipient').addEventListener('click', ()=> openAccountThen('recipient'));
+
+    function openAccountThen(role){
+      const user = loadUser();
+      if(!user){
+        // show a small prompt to create a local account for better experience
+        const name = prompt('Enter your name to create a local account (saved on this device). Leave blank to proceed as guest.');
+        if(name) { saveUser({ name, createdAt: new Date().toISOString() }); alert('Account saved locally.'); }
+      }
+      showForm(role);
+    }
+
+    // user menu button: quick profile / logout
+    document.getElementById('user-menu').addEventListener('click', ()=>{
+      const u = loadUser();
+      if(u){
+        if(confirm(`Signed in as "${u.name}".\nClick OK to sign out (local).`)){
+          localStorage.removeItem(LS_USER_KEY);
+          alert('Signed out locally.');
+        }
+      } else {
+        const name = prompt('No local account. Enter your name to sign in locally:');
+        if(name) { saveUser({ name, createdAt: new Date().toISOString() }); alert('Signed in locally.'); }
+      }
+    });
+
+    /* -----------------------
+       Search controls
+    --------------------------*/
+    document.getElementById('btn-search').addEventListener('click', ()=>{
+      const type = document.getElementById('blood-select').value;
+      const district = document.getElementById('district-select').value;
+      let filtered = centers.filter(c=>{
+        const matchesType = !type || c.blood.includes(type);
+        const matchesDistrict = !district || c.district === district;
+        return matchesType && matchesDistrict;
+      });
+      renderCenters(filtered.length ? filtered : centers);
+      if(district && districtCoords[district]) map.setView(districtCoords[district], 14);
+    });
+
+    document.getElementById('btn-show-all').addEventListener('click', ()=>{
+      renderCenters(centers);
+      if(map) map.setView([14.65,121.05], 13);
+      else initMap();
+    });
+
+    // nav
+    document.getElementById('nav-home').addEventListener('click', (e)=>{ e.preventDefault(); document.getElementById('home').scrollIntoView({behavior:'smooth'}); });
+    document.getElementById('nav-dashboard').addEventListener('click', (e)=>{ e.preventDefault(); showDashboard(); });
+    document.getElementById('nav-about').addEventListener('click', (e)=>{ e.preventDefault(); document.getElementById('about').scrollIntoView({behavior:'smooth'}); });
+
+    /* -----------------------
+       Helpers & init
+    --------------------------*/
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Expose small functions for inline onclick
+    window.focusCenter = focusCenter;
+    window.contactCenter = contactCenter;
+    window.openManage = openManage;
+    window.removeRecord = removeRecord;
+
+    // initial
+    initMap();
+    renderHistory();
+
+    // hide overlay if user has history or user saved (convenience)
+    if(loadHistory().length || loadUser()) roleScreen.classList.add('hidden');
+
+    // keyboard accessibility for closing manage modal with ESC
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){
+        const mm = document.getElementById('manage-modal');
+        if(mm.style.display === 'flex') mm.style.display = 'none';
+        const pf = document.getElementById('pre-form');
+        if(pf && !pf.classList.contains('hidden')) { pf.classList.add('hidden'); roleScreen.classList.remove('hidden'); }
+      }
+    });
+
+    // renderHistory on load to reflect saved state
+    renderHistory();
+
+    // For production: integrate server endpoints instead of localStorage.
+    // Example placeholders:
+    // - POST /api/register -> server stores user securely
+    // - POST /api/records -> server stores record, enqueues verification workflow
+    // - GET /api/centers -> dynamic centers list
+  </script>
+</body>
+</html>
